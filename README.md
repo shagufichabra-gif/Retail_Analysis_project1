@@ -126,7 +126,7 @@ FROM sales;
 Select * from sales
 where SALE_date = '2022-11-05';
 ```
-<img width="685" height="206" alt="Screenshot 2026-08-25 at 7 15 48 PM" src="https://github.com/user-attachments/assets/43494cd8-28ce-40ab-aa85-0ed1af40d3ae" />
+<img width="694" height="152" alt="Screenshot 2026-08-25 at 7 34 45 PM" src="https://github.com/user-attachments/assets/ded7dfae-f19b-443b-aba5-580bdc552026" />
 
 ### Q6. write a SQL query to retrieve all the transactions where category is Clothing and the month of November-2022
 ```sql
@@ -135,7 +135,7 @@ FROM sales
 WHERE category = 'Clothing'
 AND sale_date BETWEEN '2022-11-01' AND '2022-11-30';
 ```
-<img width="687" height="204" alt="Screenshot 2026-08-25 at 7 21 55 PM" src="https://github.com/user-attachments/assets/39f6257e-4f5c-4e0b-b771-891489a6e032" />
+<img width="681" height="160" alt="Screenshot 2026-08-25 at 7 35 33 PM" src="https://github.com/user-attachments/assets/83c17678-d6af-4b3d-97b8-0b5600bd2f0f" />
 
 ### Q7. write a SQL query to calculate the total sales for each category?
 ```sql
@@ -226,4 +226,169 @@ from (
 ```
 <img width="321" height="85" alt="Screenshot 2026-08-25 at 7 31 48 PM" src="https://github.com/user-attachments/assets/2d30713c-690b-46e8-b007-fe07d9f9188a" />
 
+### Q15. Calculate year-over-year sales growth by category (2022 vs 2023).
+```sql
+select 
+    y23.category,
+    y22.revenue as sales_2022,
+    y23.revenue as sales_2023,
+    round((y23.revenue - y22.revenue) / nullif(y22.revenue,0) * 100, 2) as yoy_growth_pct
+from
+    (select category, sum(total_sale) as revenue
+     from sales
+     where extract(year from sale_date) = 2022
+     group by category) y22
+join
+    (select category, sum(total_sale) as revenue
+     from sales
+     where extract(year from sale_date) = 2023
+     group by category) y23
+    on y22.category = y23.category;
+```
+
+<img width="306" height="86" alt="Screenshot 2026-08-25 at 7 42 41 PM" src="https://github.com/user-attachments/assets/88a824f4-f7f6-49b3-83ae-c8bc2ab114e2" />
+
+
+### Q16. Create a query to find each category's contribution to total revenue as a percentage, using window functions (no GROUP BY)
+```sql
+select distinct
+    category,
+    sum(total_sale) over (partition by category) as category_revenue,
+    round(
+        sum(total_sale) over (partition by category) * 100.0 
+        / sum(total_sale) over (), 
+        2
+    ) as revenue_pct
+from sales
+order by revenue_pct desc;
+```
+<img width="267" height="91" alt="Screenshot 2026-08-25 at 7 42 53 PM" src="https://github.com/user-attachments/assets/a476b70d-27d7-4dbd-af37-fd5d03e5f975" />
+
+
+### Q17. Rank customers within each category by their total spend using RANK() or DENSE_RANK().
+```sql
+select customer_id,
+category,
+total_spend,
+Rank()over (partition by category order by total_spend desc) as spend_rank
+from(
+select customer_id,
+        category,
+        sum(total_sale) as total_spend
+    from sales
+    group by customer_id, category
+) customer_totals                                                                                                                                               order by category, spend_rank;
+```
+<img width="289" height="146" alt="Screenshot 2026-08-25 at 7 44 45 PM" src="https://github.com/user-attachments/assets/20cea2c1-136b-4e64-83d6-0b694fb0c0e7" />
+
+
+### Q18. Calculate a running (cumulative) total of sales ordered by date for each category.
+```sql
+select sale_date,
+       category,
+       total_sale,
+       Sum(total_sale) Over 
+       (Partition by category
+        order by sale_date
+        rows between unbounded preceding and current row)
+        as cumulative_sales
+from sales
+order by category, sale_date;
+```
+<img width="308" height="245" alt="Screenshot 2026-08-25 at 7 45 02 PM" src="https://github.com/user-attachments/assets/1356bda4-55e7-4824-9af8-8327a9da0bff" />
+
+       
+### Q19. Find, for each customer, their most recent transaction and the number of days since their previous one (LAG/LEAD).
+```sql
+WITH RANKED_TRANSACTIONS AS (
+    SELECT
+        CUSTOMER_ID,
+        TRANSACTIONS_ID,
+        SALE_DATE,
+        SALE_DATE - LAG(SALE_DATE) OVER (
+            PARTITION BY CUSTOMER_ID
+            ORDER BY SALE_DATE
+        ) AS DAYS_SINCE_PREV,
+        ROW_NUMBER() OVER (
+            PARTITION BY CUSTOMER_ID
+            ORDER BY SALE_DATE DESC
+        ) AS RN
+    FROM SALES
+)
+SELECT
+    CUSTOMER_ID,
+    TRANSACTIONS_ID,
+    SALE_DATE,
+    DAYS_SINCE_PREV
+FROM RANKED_TRANSACTIONS
+WHERE RN = 1;
+```
+<img width="428" height="190" alt="Screenshot 2026-08-25 at 7 46 14 PM" src="https://github.com/user-attachments/assets/517c9a46-7336-4bd5-9fd8-52e76e7262eb" />
+
+
+### Q20. CASE Statements & Segmentation-- Segment customers into age groups (e.g., 18–25, 26–35, 36–45, 46+) and calculate total sales and average order value per group using CASE WHEN.
+```sql
+SELECT
+    CASE
+        WHEN age BETWEEN 18 AND 25 THEN 'Young'
+        WHEN age BETWEEN 26 AND 35 THEN 'Adult'
+        WHEN age BETWEEN 36 AND 45 THEN 'Older Adult'
+        ELSE 'Elder'
+    END AS age_segment,
+    SUM(total_sale) AS total_sales,
+    SUM(total_sale) / COUNT(transactions_id) AS avg_order_value
+FROM sales
+GROUP BY
+    CASE
+        WHEN age BETWEEN 18 AND 25 THEN 'Young'
+        WHEN age BETWEEN 26 AND 35 THEN 'Adult'
+        WHEN age BETWEEN 36 AND 45 THEN 'Older Adult'
+        ELSE 'Elder'
+    END
+ORDER BY total_sales DESC;
+```
+<img width="265" height="96" alt="Screenshot 2026-08-25 at 7 46 31 PM" src="https://github.com/user-attachments/assets/b925b7cb-09fc-40a8-a5c8-bdd6e763c24f" />
+
+
+### Q21. Profitability / Business Metrics-- Calculate gross profit (total_sale - cogs) and profit margin % by category, then rank categories by margin.
+```sql
+SELECT
+    category,
+    SUM(total_sale - cogs) AS gross_profit,
+    SUM(total_sale - cogs) / SUM(total_sale) * 100 AS profit_margin_pct,
+    RANK() OVER (
+        ORDER BY SUM(total_sale - cogs) / SUM(total_sale) DESC
+    ) AS rank_profit
+FROM sales
+GROUP BY category
+ORDER BY profit_margin_pct DESC;
+```
+<img width="334" height="87" alt="Screenshot 2026-08-25 at 7 47 22 PM" src="https://github.com/user-attachments/assets/d3db6571-a680-458b-bc95-f1c39df7a850" />
+
+ 
+### Q22. Advanced / Capstone -- Identify "loyal" customers — those with more than 3 transactions and total spend above the overall average customer spend — using a CTE or subquery, and rank them by total spend using a window function.
+```sql
+WITH CUSTOMER_SPEND AS (
+    SELECT
+        CUSTOMER_ID,
+        COUNT(TRANSACTIONS_ID) AS TOTAL_TRANSACTIONS,
+        SUM(TOTAL_SALE) AS TOTAL_SPEND
+    FROM SALES
+    GROUP BY CUSTOMER_ID
+),
+LOYAL_CUSTOMERS AS (
+    SELECT *
+    FROM CUSTOMER_SPEND
+    WHERE TOTAL_TRANSACTIONS > 3
+      AND TOTAL_SPEND > (SELECT AVG(TOTAL_SPEND) FROM CUSTOMER_SPEND)
+)
+SELECT
+    CUSTOMER_ID,
+    TOTAL_TRANSACTIONS,
+    TOTAL_SPEND,
+    RANK() OVER (ORDER BY TOTAL_SPEND DESC) AS SPEND_RANK
+FROM LOYAL_CUSTOMERS
+ORDER BY SPEND_RANK;
+```
+ <img width="436" height="104" alt="Screenshot 2026-08-25 at 7 47 42 PM" src="https://github.com/user-attachments/assets/02cb6d4f-0ba4-490b-92a7-cce6dc9dd961" />
 
